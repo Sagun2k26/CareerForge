@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Backend Engineer (Go)",
+    "required_skills": ["Go", "REST APIs", "PostgreSQL", "System Design", "Docker", "Concurrency", "Testing", "Distributed Caching"],
+    "sample_jd": "We are hiring a Backend Engineer to design and build high-throughput Go services. You will own REST APIs end to end, model relational data in PostgreSQL, and improve reliability and latency. Experience with system design, concurrency, containerization, and caching is expected."
+  },
+  {
+    "name": "Frontend Engineer (React)",
+    "required_skills": ["JavaScript", "TypeScript", "React", "Next.js", "CSS", "Accessibility", "Testing", "Performance Optimization"],
+    "sample_jd": "Join us as a Frontend Engineer building delightful, accessible web experiences in React and Next.js. You will craft reusable components, optimize rendering performance, and partner with design to ship polished UI with strong test coverage."
+  },
+  {
+    "name": "Full-Stack Engineer",
+    "required_skills": ["JavaScript", "TypeScript", "React", "Node.js", "REST APIs", "SQL", "Cloud Deployment", "CI/CD"],
+    "sample_jd": "We need a Full-Stack Engineer comfortable across the stack: React on the front end, Node/REST services on the back end, SQL data modeling, and cloud deployment with CI/CD. You will ship features end to end and care about quality."
+  },
+  {
+    "name": "Data Engineer",
+    "required_skills": ["Python", "SQL", "ETL", "Apache Spark", "Data Warehousing", "Airflow", "Cloud Platforms", "Data Modeling"],
+    "sample_jd": "As a Data Engineer you will build reliable batch and streaming pipelines, model warehouse schemas, and orchestrate workflows with Airflow. Strong Python and SQL, plus experience with Spark and cloud data platforms, are required."
+  },
+  {
+    "name": "DevOps Engineer",
+    "required_skills": ["Linux", "Docker", "Kubernetes", "CI/CD", "Terraform", "AWS", "Monitoring", "Scripting"],
+    "sample_jd": "We are looking for a DevOps Engineer to own our delivery pipelines and cloud infrastructure. You will manage Kubernetes workloads, codify infrastructure with Terraform on AWS, and build observability into everything."
+  }
+]

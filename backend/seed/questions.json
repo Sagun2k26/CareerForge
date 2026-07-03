@@ -1,0 +1,25 @@
+[
+  {"role_name": "Backend Engineer (Go)", "topic": "Concurrency", "prompt": "Explain goroutines and channels. How would you fan out work to N workers and collect results safely?"},
+  {"role_name": "Backend Engineer (Go)", "topic": "System Design", "prompt": "Design a rate limiter for a public API. Walk through the algorithm, storage, and how you handle distributed deployments."},
+  {"role_name": "Backend Engineer (Go)", "topic": "Databases", "prompt": "When would you choose PostgreSQL over a NoSQL store, and how do you avoid the N+1 query problem?"},
+  {"role_name": "Backend Engineer (Go)", "topic": "Reliability", "prompt": "How do you make an HTTP handler resilient to slow downstream calls? Discuss timeouts, retries, and circuit breaking."},
+  {"role_name": "Backend Engineer (Go)", "topic": "Testing", "prompt": "How do you structure tests for a service with a database dependency? Compare mocks, fakes, and integration tests."},
+
+  {"role_name": "Frontend Engineer (React)", "topic": "React", "prompt": "Explain the difference between useMemo, useCallback, and React.memo. When does each actually help?"},
+  {"role_name": "Frontend Engineer (React)", "topic": "Performance", "prompt": "A list of 10,000 rows is janky. Walk through how you would diagnose and fix the performance problem."},
+  {"role_name": "Frontend Engineer (React)", "topic": "Accessibility", "prompt": "How do you make a custom dropdown component accessible? Cover keyboard navigation and ARIA roles."},
+  {"role_name": "Frontend Engineer (React)", "topic": "State", "prompt": "When do you reach for global state vs. server cache vs. local component state? Give concrete examples."},
+  {"role_name": "Frontend Engineer (React)", "topic": "Next.js", "prompt": "Compare server components, SSR, and static generation in Next.js. How do you decide which to use for a page?"},
+
+  {"role_name": "Full-Stack Engineer", "topic": "APIs", "prompt": "Design the API and data model for a commenting feature with threaded replies and pagination."},
+  {"role_name": "Full-Stack Engineer", "topic": "Auth", "prompt": "Walk through implementing JWT-based authentication end to end, including refresh and logout."},
+  {"role_name": "Full-Stack Engineer", "topic": "Deployment", "prompt": "How would you deploy a React frontend and a Node API with zero-downtime releases and rollbacks?"},
+
+  {"role_name": "Data Engineer", "topic": "Pipelines", "prompt": "Design an ETL pipeline that ingests daily CSV drops and loads a star-schema warehouse. Handle late and duplicate data."},
+  {"role_name": "Data Engineer", "topic": "Spark", "prompt": "Explain how a Spark job is broken into stages and tasks. How would you debug a skewed join?"},
+  {"role_name": "Data Engineer", "topic": "Modeling", "prompt": "Contrast star and snowflake schemas. When is denormalization the right call in a warehouse?"},
+
+  {"role_name": "DevOps Engineer", "topic": "Kubernetes", "prompt": "Walk through what happens from `kubectl apply` to a running pod. How do liveness and readiness probes differ?"},
+  {"role_name": "DevOps Engineer", "topic": "IaC", "prompt": "How do you structure Terraform for multiple environments while avoiding drift and duplicated code?"},
+  {"role_name": "DevOps Engineer", "topic": "Observability", "prompt": "Design observability for a microservice: what metrics, logs, and traces do you collect, and how do you alert?"}
+]
