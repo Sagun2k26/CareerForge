@@ -13,11 +13,11 @@ import (
 // dependency while still demonstrating request throttling in the middleware
 // chain.
 type rateLimiter struct {
-	mu       sync.Mutex
-	hits     map[string]int
-	window   time.Duration
-	limit    int
-	resetAt  time.Time
+	mu      sync.Mutex
+	hits    map[string]int
+	window  time.Duration
+	limit   int
+	resetAt time.Time
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {

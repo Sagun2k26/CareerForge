@@ -2,6 +2,7 @@ package questionbank
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -18,6 +19,7 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.list)
 	r.Get("/search", h.search)
+	r.Post("/topic", h.topic)
 	r.Get("/{id}/model-answer", h.modelAnswer)
 	r.Post("/{id}/practiced", h.practiced)
 	return r
@@ -51,12 +53,41 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 			roleID = &id
 		}
 	}
-	items, err := h.svc.Search(r.Context(), q, roleID, 5)
+	items, err := h.svc.Search(r.Context(), q, roleID, 20)
 	if err != nil {
 		httpx.Error(w, err)
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"questions": items})
+}
+
+func (h *Handler) topic(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserID(r.Context())
+	var body struct {
+		RoleID   string `json:"role_id"`
+		RoleName string `json:"role_name"`
+		Topic    string `json:"topic"`
+	}
+	if err := httpx.Decode(r, &body); err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	roleID, err := uuid.Parse(body.RoleID)
+	if err != nil {
+		httpx.Error(w, httpx.NewError(http.StatusBadRequest, "invalid_id", "select a valid role"))
+		return
+	}
+	body.Topic = strings.TrimSpace(body.Topic)
+	if len(body.Topic) < 2 || len(body.Topic) > 80 {
+		httpx.Error(w, httpx.NewError(http.StatusBadRequest, "invalid_topic", "enter a topic between 2 and 80 characters"))
+		return
+	}
+	items, cached, err := h.svc.TopicQuestions(r.Context(), userID, roleID, body.RoleName, body.Topic)
+	if err != nil {
+		httpx.Error(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"questions": items, "cached": cached})
 }
 
 func (h *Handler) modelAnswer(w http.ResponseWriter, r *http.Request) {

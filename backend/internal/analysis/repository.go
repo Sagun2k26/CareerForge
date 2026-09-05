@@ -1,6 +1,5 @@
 // Package analysis compares a parsed resume against a target role to produce a
-// skill-gap score and an ordered learning roadmap, and tracks the user's
-// progress through that roadmap.
+// skill-gap score, role-fit assessment, interview prep and learning roadmap.
 package analysis
 
 import (
@@ -14,12 +13,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// GapResult is the model's read on resume-vs-role fit.
+// GapResult is the skill-level comparison between resume and target role.
 type GapResult struct {
 	GapScore      int      `json:"gap_score"`
 	MatchedSkills []string `json:"matched_skills"`
 	MissingSkills []string `json:"missing_skills"`
 	Summary       string   `json:"summary"`
+}
+
+// RoleFitResult is the role-fit agent's independent assessment.
+type RoleFitResult struct {
+	Score     int      `json:"score"`
+	Level     string   `json:"level"`
+	Strengths []string `json:"strengths"`
+	Concerns  []string `json:"concerns"`
+	Summary   string   `json:"summary"`
+}
+
+// InterviewPrepItem is a role/gap-grounded question retrieved through RAG.
+type InterviewPrepItem struct {
+	ID     uuid.UUID `json:"id"`
+	Topic  string    `json:"topic"`
+	Prompt string    `json:"prompt"`
 }
 
 // RoadmapItem is one ordered step in the learning plan.
@@ -29,22 +44,24 @@ type RoadmapItem struct {
 	Why       string   `json:"why"`
 	Resources []string `json:"resources"`
 	Milestone string   `json:"milestone"`
-	Status    string   `json:"status,omitempty"` // filled from progress on read
+	Status    string   `json:"status,omitempty"`
 }
 
-// Analysis is a persisted gap analysis plus its roadmap.
+// Analysis is the persisted output of the multi-agent analysis workflow.
 type Analysis struct {
-	ID            uuid.UUID     `json:"id"`
-	UserID        uuid.UUID     `json:"user_id"`
-	ResumeID      uuid.UUID     `json:"resume_id"`
-	RoleID        uuid.UUID     `json:"role_id"`
-	RoleName      string        `json:"role_name"`
-	GapScore      int           `json:"gap_score"`
-	MatchedSkills []string      `json:"matched_skills"`
-	MissingSkills []string      `json:"missing_skills"`
-	Summary       string        `json:"summary"`
-	Roadmap       []RoadmapItem `json:"roadmap"`
-	CreatedAt     time.Time     `json:"created_at"`
+	ID            uuid.UUID           `json:"id"`
+	UserID        uuid.UUID           `json:"user_id"`
+	ResumeID      uuid.UUID           `json:"resume_id"`
+	RoleID        uuid.UUID           `json:"role_id"`
+	RoleName      string              `json:"role_name"`
+	GapScore      int                 `json:"gap_score"`
+	MatchedSkills []string            `json:"matched_skills"`
+	MissingSkills []string            `json:"missing_skills"`
+	Summary       string              `json:"summary"`
+	RoleFit       RoleFitResult       `json:"role_fit"`
+	InterviewPrep []InterviewPrepItem `json:"interview_prep"`
+	Roadmap       []RoadmapItem       `json:"roadmap"`
+	CreatedAt     time.Time           `json:"created_at"`
 }
 
 const (
@@ -58,10 +75,12 @@ type Repository struct{ pool *pgxpool.Pool }
 
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
-// Save persists the analysis and its roadmap in one transaction.
+// Save persists all final agent outputs and the roadmap in one transaction.
 func (r *Repository) Save(ctx context.Context, a Analysis) error {
 	matched, _ := json.Marshal(a.MatchedSkills)
 	missing, _ := json.Marshal(a.MissingSkills)
+	roleFit, _ := json.Marshal(a.RoleFit)
+	interviewPrep, _ := json.Marshal(a.InterviewPrep)
 	roadmap, _ := json.Marshal(a.Roadmap)
 
 	tx, err := r.pool.Begin(ctx)
@@ -71,9 +90,9 @@ func (r *Repository) Save(ctx context.Context, a Analysis) error {
 	defer tx.Rollback(ctx)
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO analyses (id, user_id, resume_id, role_id, gap_score, matched_skills_json, missing_skills_json, summary, created_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		a.ID, a.UserID, a.ResumeID, a.RoleID, a.GapScore, matched, missing, a.Summary, a.CreatedAt); err != nil {
+		`INSERT INTO analyses (id, user_id, resume_id, role_id, gap_score, matched_skills_json, missing_skills_json, summary, role_fit_json, interview_prep_json, created_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+		a.ID, a.UserID, a.ResumeID, a.RoleID, a.GapScore, matched, missing, a.Summary, roleFit, interviewPrep, a.CreatedAt); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
@@ -84,16 +103,17 @@ func (r *Repository) Save(ctx context.Context, a Analysis) error {
 	return tx.Commit(ctx)
 }
 
-// Get loads an analysis, its roadmap and the user's progress merged in.
+// Get loads an analysis, its agent outputs, roadmap and user progress.
 func (r *Repository) Get(ctx context.Context, id uuid.UUID) (Analysis, error) {
 	var a Analysis
-	var matched, missing []byte
+	var matched, missing, roleFit, interviewPrep []byte
 	err := r.pool.QueryRow(ctx,
 		`SELECT a.id, a.user_id, a.resume_id, a.role_id, r.name, a.gap_score,
-		        a.matched_skills_json, a.missing_skills_json, a.summary, a.created_at
+		        a.matched_skills_json, a.missing_skills_json, a.summary,
+		        a.role_fit_json, a.interview_prep_json, a.created_at
 		 FROM analyses a JOIN roles r ON r.id = a.role_id WHERE a.id = $1`, id).
 		Scan(&a.ID, &a.UserID, &a.ResumeID, &a.RoleID, &a.RoleName, &a.GapScore,
-			&matched, &missing, &a.Summary, &a.CreatedAt)
+			&matched, &missing, &a.Summary, &roleFit, &interviewPrep, &a.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Analysis{}, ErrNotFound
 	}
@@ -102,6 +122,8 @@ func (r *Repository) Get(ctx context.Context, id uuid.UUID) (Analysis, error) {
 	}
 	_ = json.Unmarshal(matched, &a.MatchedSkills)
 	_ = json.Unmarshal(missing, &a.MissingSkills)
+	_ = json.Unmarshal(roleFit, &a.RoleFit)
+	_ = json.Unmarshal(interviewPrep, &a.InterviewPrep)
 
 	var items []byte
 	if err := r.pool.QueryRow(ctx, `SELECT items_json FROM roadmaps WHERE analysis_id = $1`, id).Scan(&items); err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -109,7 +131,6 @@ func (r *Repository) Get(ctx context.Context, id uuid.UUID) (Analysis, error) {
 	}
 	_ = json.Unmarshal(items, &a.Roadmap)
 
-	// Merge progress.
 	progress, err := r.progressMap(ctx, a.UserID, id)
 	if err != nil {
 		return Analysis{}, err

@@ -1,5 +1,4 @@
--- Schema for the AI Career Growth Platform. All migrations are idempotent
--- (IF NOT EXISTS) so the app can run them safely on every boot.
+-- Schema for the AI Career Growth Platform. All migrations are idempotent.
 
 CREATE TABLE IF NOT EXISTS users (
     id            UUID PRIMARY KEY,
@@ -44,10 +43,14 @@ CREATE TABLE IF NOT EXISTS analyses (
     gap_score           INTEGER NOT NULL DEFAULT 0,
     matched_skills_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     missing_skills_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+    role_fit_json       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    interview_prep_json JSONB NOT NULL DEFAULT '[]'::jsonb,
     summary             TEXT NOT NULL DEFAULT '',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_analyses_user ON analyses(user_id);
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS role_fit_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS interview_prep_json JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS roadmaps (
     id          UUID PRIMARY KEY,

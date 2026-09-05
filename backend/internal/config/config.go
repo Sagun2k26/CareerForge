@@ -8,27 +8,23 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config holds all runtime configuration, populated from environment variables.
-// Everything has a sensible default so the service boots with zero configuration
-// in development.
+// Config holds runtime configuration populated from environment variables.
 type Config struct {
 	Port         string
 	DatabaseURL  string
 	JWTSecret    string
 	JWTTTL       time.Duration
-	StorageDir   string        // where uploaded resume files are written
-	VectorDir    string        // where chromem-go persists embeddings
-	MigrationDir string        // path to .sql migration files
-	SeedFile     string        // roles seed file
-	LLMProvider  string        // "mock" | "anthropic" | "openai"
-	LLMModel     string        // model name passed to the provider
+	StorageDir   string
+	VectorDir    string
+	MigrationDir string
+	SeedFile     string
+	LLMProvider  string        // "mock" | "gemini" | "anthropic" | "openai"
+	LLMModel     string        // model name passed to the selected provider
 	LLMAPIKey    string        // provider API key (empty -> mock)
-	LLMTimeout   time.Duration // per-request timeout for LLM calls
+	LLMTimeout   time.Duration // per-request timeout for model calls
 }
 
-// Load reads configuration from the environment (and an optional .env file).
 func Load() Config {
-	// Best-effort load of a local .env file; ignored if absent.
 	_ = godotenv.Load()
 
 	cfg := Config{
@@ -41,13 +37,11 @@ func Load() Config {
 		MigrationDir: env("MIGRATION_DIR", "./migrations"),
 		SeedFile:     env("SEED_FILE", "./seed/roles.json"),
 		LLMProvider:  env("LLM_PROVIDER", "mock"),
-		LLMModel:     env("LLM_MODEL", "claude-sonnet-4-6"),
+		LLMModel:     env("LLM_MODEL", ""),
 		LLMAPIKey:    env("LLM_API_KEY", ""),
 		LLMTimeout:   time.Duration(envInt("LLM_TIMEOUT_SECONDS", 60)) * time.Second,
 	}
 
-	// If a provider was requested but no key supplied, fall back to mock so the
-	// app always runs.
 	if cfg.LLMProvider != "mock" && cfg.LLMAPIKey == "" {
 		cfg.LLMProvider = "mock"
 	}

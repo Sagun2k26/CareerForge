@@ -1,0 +1,7 @@
+[
+  {"query":"Go concurrency goroutines channels race conditions","role":"Backend Engineer (Go)","topic":"Concurrency","must_contain_any":["goroutine","channel","race","mutex"]},
+  {"query":"system design scalable URL shortener","role":"Backend Engineer (Go)","topic":"System Design","must_contain_any":["scal","cache","database","partition","rate limit"]},
+  {"query":"database index millions of rows","role":"Backend Engineer (Go)","topic":"Databases","must_contain_any":["index","b-tree","query","database"]},
+  {"query":"distributed cache consistency invalidation","role":"Backend Engineer (Go)","topic":"Caching","must_contain_any":["cache","ttl","invalidation","consistency"]},
+  {"query":"message queue delivery retry idempotency","role":"Backend Engineer (Go)","topic":"Distributed Systems","must_contain_any":["queue","retry","idempot","delivery"]}
+]

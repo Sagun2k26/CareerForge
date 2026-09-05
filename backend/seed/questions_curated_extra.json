@@ -1,0 +1,14 @@
+[
+  {"role_name":"Backend Engineer (Go)","topic":"System Design","prompt":"Design a URL shortener for hundreds of millions of redirects per day. Discuss data model, partitioning, caching, hot keys, and availability."},
+  {"role_name":"Backend Engineer (Go)","topic":"System Design","prompt":"Design a rate limiter for a multi-region API. Compare token bucket and sliding window, and explain where state should live."},
+  {"role_name":"Backend Engineer (Go)","topic":"System Design","prompt":"Design a notification service that supports retries, deduplication, user preferences, and multiple delivery channels."},
+  {"role_name":"Backend Engineer (Go)","topic":"System Design","prompt":"Design an order processing system that remains correct when messages are delivered more than once."},
+  {"role_name":"Backend Engineer (Go)","topic":"System Design","prompt":"Design a high-throughput API that must survive a 10x traffic spike. Explain load balancing, autoscaling, backpressure, caching, and database protection."},
+  {"role_name":"Backend Engineer (Go)","topic":"Databases","prompt":"A query over tens of millions of rows is slow despite an index. How would you diagnose and improve it?"},
+  {"role_name":"Backend Engineer (Go)","topic":"Distributed Systems","prompt":"Explain at-least-once delivery and how idempotency prevents duplicate side effects."},
+  {"role_name":"Backend Engineer (Go)","topic":"Caching","prompt":"Compare cache-aside, read-through, write-through, and write-back caching. What failure modes does each introduce?"},
+  {"role_name":"Backend Engineer (Go)","topic":"Observability","prompt":"How would you isolate the source of an end-to-end latency regression across several services?"},
+  {"role_name":"Backend Engineer (Go)","topic":"Reliability","prompt":"Explain circuit breakers, retries with backoff, timeouts, and bulkheads. When can retries make an outage worse?"},
+  {"role_name":"Backend Engineer (Go)","topic":"APIs","prompt":"How would you design an idempotent payment or order creation API?"},
+  {"role_name":"Backend Engineer (Go)","topic":"Security","prompt":"How do parameterized queries prevent SQL injection, and what other protections should a backend add?"}
+]

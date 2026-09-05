@@ -1,25 +1,562 @@
 [
-  {"role_name": "Backend Engineer (Go)", "topic": "Concurrency", "prompt": "Explain goroutines and channels. How would you fan out work to N workers and collect results safely?"},
-  {"role_name": "Backend Engineer (Go)", "topic": "System Design", "prompt": "Design a rate limiter for a public API. Walk through the algorithm, storage, and how you handle distributed deployments."},
-  {"role_name": "Backend Engineer (Go)", "topic": "Databases", "prompt": "When would you choose PostgreSQL over a NoSQL store, and how do you avoid the N+1 query problem?"},
-  {"role_name": "Backend Engineer (Go)", "topic": "Reliability", "prompt": "How do you make an HTTP handler resilient to slow downstream calls? Discuss timeouts, retries, and circuit breaking."},
-  {"role_name": "Backend Engineer (Go)", "topic": "Testing", "prompt": "How do you structure tests for a service with a database dependency? Compare mocks, fakes, and integration tests."},
-
-  {"role_name": "Frontend Engineer (React)", "topic": "React", "prompt": "Explain the difference between useMemo, useCallback, and React.memo. When does each actually help?"},
-  {"role_name": "Frontend Engineer (React)", "topic": "Performance", "prompt": "A list of 10,000 rows is janky. Walk through how you would diagnose and fix the performance problem."},
-  {"role_name": "Frontend Engineer (React)", "topic": "Accessibility", "prompt": "How do you make a custom dropdown component accessible? Cover keyboard navigation and ARIA roles."},
-  {"role_name": "Frontend Engineer (React)", "topic": "State", "prompt": "When do you reach for global state vs. server cache vs. local component state? Give concrete examples."},
-  {"role_name": "Frontend Engineer (React)", "topic": "Next.js", "prompt": "Compare server components, SSR, and static generation in Next.js. How do you decide which to use for a page?"},
-
-  {"role_name": "Full-Stack Engineer", "topic": "APIs", "prompt": "Design the API and data model for a commenting feature with threaded replies and pagination."},
-  {"role_name": "Full-Stack Engineer", "topic": "Auth", "prompt": "Walk through implementing JWT-based authentication end to end, including refresh and logout."},
-  {"role_name": "Full-Stack Engineer", "topic": "Deployment", "prompt": "How would you deploy a React frontend and a Node API with zero-downtime releases and rollbacks?"},
-
-  {"role_name": "Data Engineer", "topic": "Pipelines", "prompt": "Design an ETL pipeline that ingests daily CSV drops and loads a star-schema warehouse. Handle late and duplicate data."},
-  {"role_name": "Data Engineer", "topic": "Spark", "prompt": "Explain how a Spark job is broken into stages and tasks. How would you debug a skewed join?"},
-  {"role_name": "Data Engineer", "topic": "Modeling", "prompt": "Contrast star and snowflake schemas. When is denormalization the right call in a warehouse?"},
-
-  {"role_name": "DevOps Engineer", "topic": "Kubernetes", "prompt": "Walk through what happens from `kubectl apply` to a running pod. How do liveness and readiness probes differ?"},
-  {"role_name": "DevOps Engineer", "topic": "IaC", "prompt": "How do you structure Terraform for multiple environments while avoiding drift and duplicated code?"},
-  {"role_name": "DevOps Engineer", "topic": "Observability", "prompt": "Design observability for a microservice: what metrics, logs, and traces do you collect, and how do you alert?"}
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Go",
+    "prompt": "Explain goroutines and channels. How would you fan out work to N workers and collect results safely?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Go",
+    "prompt": "What is the difference between buffered and unbuffered channels, and when would you use each?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Go",
+    "prompt": "How does context cancellation work in Go, and where should it be propagated in a service?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Concurrency",
+    "prompt": "How would you prevent a race condition when multiple goroutines update shared state?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design a rate limiter for a public API. Discuss algorithm, storage, and distributed deployment."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design a URL shortener that can handle high read traffic. Explain the main trade-offs."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "How would you design an idempotent payment API that safely handles client retries?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Databases",
+    "prompt": "When would you choose PostgreSQL over NoSQL, and how do you avoid the N+1 query problem?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Databases",
+    "prompt": "Explain database indexes and why too many indexes can hurt write performance."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Databases",
+    "prompt": "How would you diagnose and optimize a slow SQL query in production?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Caching",
+    "prompt": "Explain cache-aside, write-through, and write-back caching. When would you use each?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Caching",
+    "prompt": "What causes cache stampedes and how would you prevent them?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Kafka",
+    "prompt": "Explain Kafka partitions, consumer groups, offsets, and delivery semantics."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Kafka",
+    "prompt": "A consumer crashes after processing a message but before committing the offset. What happens?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Reliability",
+    "prompt": "How do you make an HTTP handler resilient to slow downstream calls? Discuss timeouts, retries, and circuit breakers."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Reliability",
+    "prompt": "What is exponential backoff and jitter, and why are they important for retries?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "APIs",
+    "prompt": "Compare REST and gRPC. When would you choose one over the other?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Kubernetes",
+    "prompt": "Explain readiness and liveness probes and how a bad configuration can cause an outage."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Testing",
+    "prompt": "How do you test a service with a database dependency? Compare mocks, fakes, and integration tests."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Debugging",
+    "prompt": "A production API suddenly has high p95 latency. How would you isolate the bottleneck?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "React",
+    "prompt": "Explain useMemo, useCallback, and React.memo. When does each actually help?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "React",
+    "prompt": "Explain React reconciliation and why stable keys matter in lists."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "React",
+    "prompt": "What causes unnecessary re-renders and how would you diagnose them?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "React",
+    "prompt": "Explain controlled and uncontrolled components and when to use each."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "State",
+    "prompt": "When do you use global state, server cache, or local component state?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "State",
+    "prompt": "How would you avoid stale state and race conditions in asynchronous UI updates?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Performance",
+    "prompt": "A list of 10,000 rows is janky. How would you diagnose and fix it?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Performance",
+    "prompt": "Explain code splitting, lazy loading, and bundle-size optimization."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Performance",
+    "prompt": "How would you improve Core Web Vitals for a slow page?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Next.js",
+    "prompt": "Compare server components, SSR, and static generation in Next.js."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Next.js",
+    "prompt": "How do caching and revalidation work in Next.js applications?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "JavaScript",
+    "prompt": "Explain the event loop, microtasks, and macrotasks with an example."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "JavaScript",
+    "prompt": "Explain closures and a practical use case in frontend development."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "TypeScript",
+    "prompt": "What are generics and discriminated unions, and when are they useful?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Accessibility",
+    "prompt": "How do you make a custom dropdown accessible? Cover keyboard navigation and ARIA."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Testing",
+    "prompt": "How would you test a React component that fetches remote data?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "APIs",
+    "prompt": "How do you handle loading, error, retry, and cancellation states for API requests?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Security",
+    "prompt": "Explain XSS and CSRF and how a frontend application should mitigate them."
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Architecture",
+    "prompt": "How would you structure a large React application to keep features maintainable?"
+  },
+  {
+    "role_name": "Frontend Engineer (React)",
+    "topic": "Debugging",
+    "prompt": "A page becomes slow only after several minutes of use. How would you investigate?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "APIs",
+    "prompt": "Design the API and data model for threaded comments with pagination."
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "APIs",
+    "prompt": "How would you design idempotent create/update endpoints?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Auth",
+    "prompt": "Walk through JWT authentication including refresh, expiration, and logout."
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Auth",
+    "prompt": "How would you implement role-based access control across frontend and backend?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Databases",
+    "prompt": "How do you choose between SQL and NoSQL for a new product feature?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Databases",
+    "prompt": "Explain transactions and isolation levels with a practical example."
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "System Design",
+    "prompt": "Design a notification system supporting email, push, and in-app notifications."
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "System Design",
+    "prompt": "Design a file-upload service that supports large files and retries."
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Caching",
+    "prompt": "Where would you add caching in a full-stack application and how would you invalidate it?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Frontend",
+    "prompt": "How would you prevent unnecessary React re-renders in a data-heavy dashboard?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Frontend",
+    "prompt": "How would you implement optimistic UI updates safely?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Backend",
+    "prompt": "How would you structure background jobs that must be retried reliably?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Backend",
+    "prompt": "How do timeouts, retries, and circuit breakers interact?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Security",
+    "prompt": "How do you prevent SQL injection, XSS, and CSRF?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Security",
+    "prompt": "How should passwords and sensitive secrets be stored?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Testing",
+    "prompt": "Describe your testing strategy across unit, integration, API, and end-to-end tests."
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Deployment",
+    "prompt": "How would you deploy a frontend and API with zero downtime and rollback support?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Observability",
+    "prompt": "What logs, metrics, and traces would you add to debug production failures?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Performance",
+    "prompt": "An endpoint is slow under load. How would you determine whether the bottleneck is frontend, API, or database?"
+  },
+  {
+    "role_name": "Full-Stack Engineer",
+    "topic": "Scalability",
+    "prompt": "How would you scale a monolith that is starting to receive much higher traffic?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Pipelines",
+    "prompt": "Design an ETL pipeline for daily CSV drops, including late and duplicate data."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Pipelines",
+    "prompt": "How do you make a data pipeline idempotent and safely retryable?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Pipelines",
+    "prompt": "Compare batch and streaming pipelines and give a use case for each."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Spark",
+    "prompt": "Explain how a Spark job is divided into jobs, stages, and tasks."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Spark",
+    "prompt": "How would you diagnose and fix a skewed Spark join?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Spark",
+    "prompt": "Explain narrow and wide transformations and why shuffles are expensive."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Kafka",
+    "prompt": "How would you use Kafka in a real-time data pipeline?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Kafka",
+    "prompt": "Explain partitions, offsets, consumer groups, and ordering guarantees."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Modeling",
+    "prompt": "Contrast star and snowflake schemas."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Modeling",
+    "prompt": "What are fact and dimension tables? Give a practical example."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Warehousing",
+    "prompt": "How would you model slowly changing dimensions?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Warehousing",
+    "prompt": "Compare a data warehouse, data lake, and lakehouse."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "SQL",
+    "prompt": "How would you find and optimize a slow analytical SQL query?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "SQL",
+    "prompt": "Explain window functions and give a useful analytics example."
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Quality",
+    "prompt": "How would you detect schema drift and bad data before it reaches downstream tables?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Quality",
+    "prompt": "What data-quality checks would you add to a production pipeline?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Orchestration",
+    "prompt": "How do DAG dependencies, retries, backfills, and scheduling work in a workflow orchestrator?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Reliability",
+    "prompt": "How would you recover a pipeline after a partial failure without duplicating data?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Storage",
+    "prompt": "How do partitioning and file formats such as Parquet improve analytical workloads?"
+  },
+  {
+    "role_name": "Data Engineer",
+    "topic": "Debugging",
+    "prompt": "A daily pipeline that normally takes 20 minutes now takes two hours. How would you isolate the cause?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Kubernetes",
+    "prompt": "Walk through what happens from kubectl apply to a running pod."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Kubernetes",
+    "prompt": "Explain readiness, liveness, and startup probes."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Kubernetes",
+    "prompt": "A pod is stuck in CrashLoopBackOff. How would you debug it?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Kubernetes",
+    "prompt": "Explain requests, limits, autoscaling, and what can cause OOMKilled."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Docker",
+    "prompt": "Explain Docker layers and how you would reduce image size and build time."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Docker",
+    "prompt": "What is the difference between a container and a virtual machine?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "IaC",
+    "prompt": "How do you structure Terraform for multiple environments while avoiding drift?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "IaC",
+    "prompt": "How should Terraform state be stored and protected in a team environment?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "CI/CD",
+    "prompt": "Design a CI/CD pipeline with tests, deployment, rollback, and approvals."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "CI/CD",
+    "prompt": "Compare rolling, blue-green, and canary deployments."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Observability",
+    "prompt": "Design observability for a microservice: metrics, logs, traces, and alerts."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Observability",
+    "prompt": "What are RED and USE metrics, and when would you use them?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Networking",
+    "prompt": "Explain DNS resolution, load balancers, reverse proxies, and TLS in a web request."
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Networking",
+    "prompt": "How would you debug intermittent connectivity between two services?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Reliability",
+    "prompt": "What is an SLI, SLO, and error budget?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Reliability",
+    "prompt": "How do circuit breakers and retries prevent cascading failures?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Cloud",
+    "prompt": "How would you design a highly available service across availability zones?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Security",
+    "prompt": "How should application secrets be managed in CI/CD and Kubernetes?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Incident Response",
+    "prompt": "A deployment causes error rates to spike. What steps would you take?"
+  },
+  {
+    "role_name": "DevOps Engineer",
+    "topic": "Scaling",
+    "prompt": "CPU is low but request latency is high. What would you investigate before scaling?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design a URL shortener for hundreds of millions of redirects per day. Discuss data model, partitioning, caching, hot keys, and availability."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design a rate limiter for a multi-region API. Compare token bucket and sliding window, and explain where state should live."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design a notification service that supports retries, deduplication, user preferences, and multiple delivery channels."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design an order processing system that remains correct when messages are delivered more than once."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "System Design",
+    "prompt": "Design a high-throughput API that must survive a 10x traffic spike. Explain load balancing, autoscaling, backpressure, caching, and database protection."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Databases",
+    "prompt": "A query over tens of millions of rows is slow despite an index. How would you diagnose and improve it?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Distributed Systems",
+    "prompt": "Explain at-least-once delivery and how idempotency prevents duplicate side effects."
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Caching",
+    "prompt": "Compare cache-aside, read-through, write-through, and write-back caching. What failure modes does each introduce?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Observability",
+    "prompt": "How would you isolate the source of an end-to-end latency regression across several services?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Reliability",
+    "prompt": "Explain circuit breakers, retries with backoff, timeouts, and bulkheads. When can retries make an outage worse?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "APIs",
+    "prompt": "How would you design an idempotent payment or order creation API?"
+  },
+  {
+    "role_name": "Backend Engineer (Go)",
+    "topic": "Security",
+    "prompt": "How do parameterized queries prevent SQL injection, and what other protections should a backend add?"
+  }
 ]

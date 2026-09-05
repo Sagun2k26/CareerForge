@@ -9,52 +9,28 @@ import (
 
 	"github.com/sagun-patwari/ai-career-platform/internal/httpx"
 	"github.com/sagun-patwari/ai-career-platform/internal/llm"
+	"github.com/sagun-patwari/ai-career-platform/internal/questionbank"
 	"github.com/sagun-patwari/ai-career-platform/internal/resume"
 	"github.com/sagun-patwari/ai-career-platform/internal/role"
 )
 
-// Service runs the gap analysis + roadmap generation flow.
+// Service coordinates the multi-agent career analysis workflow.
 type Service struct {
-	repo     *Repository
-	resumes  *resume.Repository
-	roles    *role.Repository
-	llm      *llm.Client
+	repo      *Repository
+	resumes   *resume.Repository
+	roles     *role.Repository
+	questions *questionbank.Service
+	llm       *llm.Client
 }
 
-func NewService(repo *Repository, resumes *resume.Repository, roles *role.Repository, client *llm.Client) *Service {
-	return &Service{repo: repo, resumes: resumes, roles: roles, llm: client}
+func NewService(repo *Repository, resumes *resume.Repository, roles *role.Repository, questions *questionbank.Service, client *llm.Client) *Service {
+	return &Service{repo: repo, resumes: resumes, roles: roles, questions: questions, llm: client}
 }
 
-// Analyze compares a parsed resume to a role and builds a roadmap.
+// Analyze runs the dependency-aware agent graph and persists its final state.
 func (s *Service) Analyze(ctx context.Context, userID, resumeID, roleID uuid.UUID) (Analysis, error) {
-	res, err := s.resumes.Get(ctx, resumeID)
-	if err != nil {
-		return Analysis{}, err
-	}
-	if res.UserID != userID {
-		return Analysis{}, httpx.NewError(http.StatusForbidden, "forbidden", "not your resume")
-	}
-	if res.Status != resume.StatusParsed {
-		return Analysis{}, httpx.NewError(http.StatusConflict, "not_ready", "resume is still being parsed")
-	}
-	targetRole, err := s.roles.Get(ctx, roleID)
-	if err != nil {
-		return Analysis{}, err
-	}
-
-	// 1. Skill-gap analysis.
-	gapSys, gapUser := llm.GapAnalysisPrompt(string(res.ParsedJSON), targetRole.Name, targetRole.RequiredSkills)
-	var gap GapResult
-	if err := s.llm.CompleteJSON(ctx, gapSys, gapUser, &gap); err != nil {
-		return Analysis{}, err
-	}
-
-	// 2. Roadmap for the missing skills.
-	roadSys, roadUser := llm.RoadmapPrompt(targetRole.Name, gap.MissingSkills)
-	var roadmap struct {
-		Items []RoadmapItem `json:"items"`
-	}
-	if err := s.llm.CompleteJSON(ctx, roadSys, roadUser, &roadmap); err != nil {
+	st := &workflowState{userID: userID, resumeID: resumeID, roleID: roleID}
+	if err := runWorkflow(ctx, s.agents(st)); err != nil {
 		return Analysis{}, err
 	}
 
@@ -63,12 +39,14 @@ func (s *Service) Analyze(ctx context.Context, userID, resumeID, roleID uuid.UUI
 		UserID:        userID,
 		ResumeID:      resumeID,
 		RoleID:        roleID,
-		RoleName:      targetRole.Name,
-		GapScore:      gap.GapScore,
-		MatchedSkills: gap.MatchedSkills,
-		MissingSkills: gap.MissingSkills,
-		Summary:       gap.Summary,
-		Roadmap:       roadmap.Items,
+		RoleName:      st.role.Name,
+		GapScore:      st.gap.GapScore,
+		MatchedSkills: st.gap.MatchedSkills,
+		MissingSkills: st.gap.MissingSkills,
+		Summary:       st.gap.Summary,
+		RoleFit:       st.roleFit,
+		InterviewPrep: st.interview,
+		Roadmap:       st.roadmap,
 		CreatedAt:     time.Now().UTC(),
 	}
 	if err := s.repo.Save(ctx, a); err != nil {

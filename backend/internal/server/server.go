@@ -29,7 +29,6 @@ import (
 	"github.com/sagun-patwari/ai-career-platform/internal/worker"
 )
 
-// Server holds the assembled application and its lifecycle resources.
 type Server struct {
 	Handler http.Handler
 	pool    *pgxpool.Pool
@@ -38,9 +37,7 @@ type Server struct {
 	llm     *llm.Client
 }
 
-// New builds the entire application from configuration.
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, error) {
-	// Infrastructure ---------------------------------------------------------
 	pool, err := database.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
@@ -58,12 +55,9 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 		pool.Close()
 		return nil, err
 	}
-
 	workers := worker.NewPool(ctx, 4, 256, logger)
-
 	jwt := auth.NewManager(cfg.JWTSecret, cfg.JWTTTL)
 
-	// Repositories -----------------------------------------------------------
 	userRepo := user.NewRepository(pool)
 	roleRepo := role.NewRepository(pool)
 	resumeRepo := resume.NewRepository(pool)
@@ -71,23 +65,20 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 	questionRepo := questionbank.NewRepository(pool)
 	interviewRepo := interview.NewRepository(pool)
 
-	// Services ---------------------------------------------------------------
 	userSvc := user.NewService(userRepo, jwt)
 	resumeSvc, err := resume.NewService(resumeRepo, llmClient, workers, cfg.StorageDir)
 	if err != nil {
 		pool.Close()
 		return nil, err
 	}
-	analysisSvc := analysis.NewService(analysisRepo, resumeRepo, roleRepo, llmClient)
 	questionSvc := questionbank.NewService(questionRepo, ragEngine, llmClient)
+	analysisSvc := analysis.NewService(analysisRepo, resumeRepo, roleRepo, questionSvc, llmClient)
 	interviewSvc := interview.NewService(interviewRepo, roleRepo, ragEngine, llmClient)
 
-	// Seed roles + questions -------------------------------------------------
 	if err := seed(ctx, logger, roleRepo, questionSvc, cfg.SeedFile); err != nil {
 		logger.Error("seeding failed (continuing)", "error", err)
 	}
 
-	// Handlers ---------------------------------------------------------------
 	userH := user.NewHandler(userSvc)
 	roleH := role.NewHandler(roleRepo)
 	resumeH := resume.NewHandler(resumeSvc)
@@ -95,7 +86,6 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 	questionH := questionbank.NewHandler(questionSvc)
 	interviewH := interview.NewHandler(interviewSvc)
 
-	// Router -----------------------------------------------------------------
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -115,11 +105,9 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 	})
 
 	r.Route("/api", func(api chi.Router) {
-		// Public.
 		api.Mount("/auth", userH.PublicRoutes())
 		api.Mount("/roles", roleH.Routes())
 
-		// Protected.
 		api.Group(func(p chi.Router) {
 			p.Use(jwt.Middleware)
 			p.Get("/me", userH.Me)
@@ -133,7 +121,6 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 	return &Server{Handler: r, pool: pool, workers: workers, logger: logger, llm: llmClient}, nil
 }
 
-// Close releases resources gracefully.
 func (s *Server) Close() {
 	s.workers.Shutdown()
 	s.pool.Close()

@@ -3,14 +3,17 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"math"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestExtractJSON(t *testing.T) {
 	cases := map[string]string{
-		"```json\n{\"a\":1}\n```":      `{"a":1}`,
+		"```json\n{\"a\":1}\n```":            `{"a":1}`,
 		"here is the result: {\"a\":1} done": `{"a":1}`,
 		"[1, 2, 3]":                          `[1, 2, 3]`,
 		"{\"nested\": {\"b\": 2}}":           `{"nested": {"b": 2}}`,
@@ -34,10 +37,25 @@ func TestMockResumeParseProducesValidJSON(t *testing.T) {
 	}
 }
 
-func TestMockGapAndRoadmapDecode(t *testing.T) {
+func TestMockAnalysisPromptsDecode(t *testing.T) {
 	client := New(NewMockProvider(), time.Second)
+	resume := `{"skills":["Go"]}`
+	role := "Backend Engineer"
+	required := []string{"Go", "System Design"}
 
-	gapSys, gapUser := GapAnalysisPrompt(`{"skills":["Go"]}`, "Backend Engineer", []string{"Go", "System Design"})
+	fitSys, fitUser := RoleFitPrompt(resume, role, required)
+	var fit struct {
+		Score int    `json:"score"`
+		Level string `json:"level"`
+	}
+	if err := client.CompleteJSON(context.Background(), fitSys, fitUser, &fit); err != nil {
+		t.Fatalf("role fit: %v", err)
+	}
+	if fit.Score <= 0 || fit.Level == "" {
+		t.Fatalf("invalid role fit: %+v", fit)
+	}
+
+	gapSys, gapUser := GapAnalysisPrompt(resume, role, required)
 	var gap struct {
 		GapScore      int      `json:"gap_score"`
 		MissingSkills []string `json:"missing_skills"`
@@ -49,7 +67,7 @@ func TestMockGapAndRoadmapDecode(t *testing.T) {
 		t.Fatalf("expected positive gap score, got %d", gap.GapScore)
 	}
 
-	roadSys, roadUser := RoadmapPrompt("Backend Engineer", gap.MissingSkills)
+	roadSys, roadUser := RoadmapPrompt(role, gap.MissingSkills)
 	var roadmap struct {
 		Items []map[string]any `json:"items"`
 	}
@@ -68,8 +86,8 @@ func TestMockEmbedIsDeterministicAndNormalized(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := m.Embed(context.Background(), []string{"hello"})
-	if len(a[0]) != 256 {
-		t.Fatalf("expected 256 dims, got %d", len(a[0]))
+	if len(a[0]) != 768 {
+		t.Fatalf("expected 768 dims, got %d", len(a[0]))
 	}
 	for i := range a[0] {
 		if a[0][i] != b[0][i] {
@@ -100,5 +118,32 @@ func TestScoreAnswerRoundTrip(t *testing.T) {
 	}
 	if score.Clarity < 0 || score.Clarity > 10 {
 		t.Fatalf("clarity out of range: %d", score.Clarity)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestGeminiProviderGenerationAndEmbedding(t *testing.T) {
+	hc := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Header.Get("x-goog-api-key") != "key" {
+			t.Fatal("missing Gemini API key header")
+		}
+		body := `{"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}`
+		if strings.Contains(r.URL.Path, ":embedContent") {
+			body = `{"embedding":{"values":[0.1,0.2]}}`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}
+	p := NewGeminiProvider("key", "gemini-test", hc)
+
+	got, err := p.Complete(context.Background(), "system", []Message{{Role: RoleUser, Content: "hi"}})
+	if err != nil || got != "hello" {
+		t.Fatalf("complete = %q, %v", got, err)
+	}
+	vecs, err := p.Embed(context.Background(), []string{"hello"})
+	if err != nil || len(vecs) != 1 || len(vecs[0]) != 2 {
+		t.Fatalf("embed = %v, %v", vecs, err)
 	}
 }

@@ -1,7 +1,4 @@
 // Package rag wraps chromem-go, a zero-dependency embeddable vector database.
-// It keeps the whole stack to a single binary plus Postgres: there is no
-// separate vector service to run. Embeddings are produced by the shared LLM
-// client, so dev (mock) and prod (hosted) use the same code path.
 package rag
 
 import (
@@ -13,26 +10,22 @@ import (
 	"github.com/sagun-patwari/ai-career-platform/internal/llm"
 )
 
-// Collections we maintain.
 const (
 	CollectionQuestions = "questions"
 	CollectionRoles     = "roles"
 )
 
-// Engine is the application-facing handle to the vector store.
 type Engine struct {
 	db        *chromem.DB
 	embedFunc chromem.EmbeddingFunc
 }
 
-// Document is a thing we want to retrieve later.
 type Document struct {
 	ID       string
 	Content  string
 	Metadata map[string]string
 }
 
-// Result is a retrieved document with its similarity score.
 type Result struct {
 	ID         string
 	Content    string
@@ -40,8 +33,6 @@ type Result struct {
 	Similarity float32
 }
 
-// New opens (or creates) a persistent vector DB at dir and wires embeddings to
-// the LLM client.
 func New(dir string, client *llm.Client) (*Engine, error) {
 	db, err := chromem.NewPersistentDB(dir, false)
 	if err != nil {
@@ -57,7 +48,6 @@ func (e *Engine) collection(name string) (*chromem.Collection, error) {
 	return e.db.GetOrCreateCollection(name, nil, e.embedFunc)
 }
 
-// Upsert adds or replaces documents in a collection.
 func (e *Engine) Upsert(ctx context.Context, collection string, docs []Document) error {
 	c, err := e.collection(collection)
 	if err != nil {
@@ -77,26 +67,87 @@ func (e *Engine) Upsert(ctx context.Context, collection string, docs []Document)
 	return c.AddDocuments(ctx, cdocs, 4)
 }
 
-// Query returns the n most similar documents to the query text, optionally
-// filtered by metadata equality.
+// queryEmbedding safely contains a chromem-go panic that occurs when n is
+// larger than the number of documents left after metadata filtering.
+func queryEmbedding(
+	ctx context.Context,
+	c *chromem.Collection,
+	embedding []float32,
+	n int,
+	where map[string]string,
+) (res []chromem.Result, panicked bool, err error) {
+	defer func() {
+		if recover() != nil {
+			res = nil
+			panicked = true
+			err = nil
+		}
+	}()
+	res, err = c.QueryEmbedding(ctx, embedding, n, where, nil)
+	return res, false, err
+}
+
+// Query retrieves a larger semantic candidate set, safely handles metadata
+// filters that leave fewer documents than requested, then hybrid-reranks and
+// truncates back to the caller's requested top-K.
 func (e *Engine) Query(ctx context.Context, collection, query string, n int, where map[string]string) ([]Result, error) {
 	c, err := e.collection(collection)
 	if err != nil {
 		return nil, err
 	}
+
 	count := c.Count()
-	if count == 0 {
+	if count == 0 || n <= 0 {
 		return nil, nil
 	}
 	if n > count {
 		n = count
 	}
-	res, err := c.Query(ctx, query, n, where, nil)
+
+	requested := n
+
+	// Overfetch semantic candidates so lexical relevance + metadata reranking
+	// has enough candidates to improve ordering.
+	candidateK := n * 4
+	if candidateK < 20 {
+		candidateK = 20
+	}
+	if candidateK > count {
+		candidateK = count
+	}
+
+	embedding, err := e.embedFunc(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Result, 0, len(res))
-	for _, r := range res {
+
+	// Find the largest safe K up to candidateK. chromem-go can panic when a
+	// metadata filter leaves fewer matching documents than K.
+	low, high := 1, candidateK
+	var best []chromem.Result
+
+	for low <= high {
+		mid := (low + high) / 2
+
+		res, panicked, qerr := queryEmbedding(ctx, c, embedding, mid, where)
+		if qerr != nil {
+			return nil, qerr
+		}
+		if panicked {
+			high = mid - 1
+			continue
+		}
+
+		best = res
+		low = mid + 1
+	}
+
+	if len(best) == 0 {
+		return nil, nil
+	}
+
+	out := make([]Result, 0, len(best))
+	for _, r := range best {
 		out = append(out, Result{
 			ID:         r.ID,
 			Content:    r.Content,
@@ -104,10 +155,17 @@ func (e *Engine) Query(ctx context.Context, collection, query string, n int, whe
 			Similarity: r.Similarity,
 		})
 	}
+
+	// semantic similarity + lexical overlap + metadata relevance + dedup
+	out = hybridRerank(query, out, where)
+
+	if len(out) > requested {
+		out = out[:requested]
+	}
+
 	return out, nil
 }
 
-// Count returns the number of documents in a collection.
 func (e *Engine) Count(collection string) int {
 	c, err := e.collection(collection)
 	if err != nil {

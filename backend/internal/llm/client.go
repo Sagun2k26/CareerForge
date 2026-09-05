@@ -1,9 +1,5 @@
 // Package llm is a provider-agnostic wrapper over hosted LLM providers
-// (Anthropic / OpenAI) plus a deterministic mock used in development and tests.
-//
-// Every part of the system that talks to a model goes through Client, which
-// centralizes prompt construction, retries, timeouts and JSON extraction. To
-// switch providers you only change configuration; no calling code changes.
+// plus a deterministic mock used in development, tests, and graceful fallback.
 package llm
 
 import (
@@ -11,11 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 )
 
-// Role identifies the speaker of a chat message.
 type Role string
 
 const (
@@ -24,68 +20,153 @@ const (
 	RoleAssistant Role = "assistant"
 )
 
-// Message is a single chat turn.
 type Message struct {
 	Role    Role   `json:"role"`
 	Content string `json:"content"`
 }
 
-// Provider is the minimal surface a backend (Anthropic, OpenAI, mock) must
-// implement. Keeping it tiny makes new providers cheap to add.
 type Provider interface {
-	// Complete returns a single assistant completion for the conversation.
 	Complete(ctx context.Context, system string, messages []Message) (string, error)
-	// Embed returns one vector per input string.
 	Embed(ctx context.Context, texts []string) ([][]float32, error)
-	// Name identifies the provider for logging.
 	Name() string
 }
 
-// Client wraps a Provider with timeouts, retries and convenience helpers.
+type fastProvider interface {
+	CompleteFast(ctx context.Context, system string, messages []Message) (string, error)
+}
+
 type Client struct {
 	provider Provider
+	fallback Provider
 	timeout  time.Duration
 	retries  int
 }
 
-// New builds a Client around the given provider.
 func New(provider Provider, timeout time.Duration) *Client {
-	return &Client{provider: provider, timeout: timeout, retries: 2}
+	c := &Client{provider: provider, timeout: timeout, retries: 0}
+	if provider != nil && provider.Name() != "mock" {
+		c.fallback = NewMockProvider()
+	}
+	return c
 }
 
-// Provider returns the underlying provider name (for health checks).
 func (c *Client) Provider() string { return c.provider.Name() }
 
-// Complete runs a chat completion with retry + timeout.
-func (c *Client) Complete(ctx context.Context, system string, messages []Message) (string, error) {
+func (c *Client) runPrimaryCompletion(ctx context.Context, call func(context.Context) (string, error)) (string, error) {
 	var lastErr error
 	for attempt := 0; attempt <= c.retries; attempt++ {
 		cctx, cancel := context.WithTimeout(ctx, c.timeout)
-		out, err := c.provider.Complete(cctx, system, messages)
+		out, err := call(cctx)
 		cancel()
 		if err == nil {
 			return out, nil
 		}
 		lastErr = err
-		// simple linear backoff
-		time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+		if nonRetryableCompletionError(err) {
+			return "", err
+		}
+		if attempt < c.retries {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Duration(attempt+1) * 200 * time.Millisecond):
+			}
+		}
 	}
 	return "", fmt.Errorf("llm complete failed after retries: %w", lastErr)
 }
 
-// CompletePrompt is a convenience for a single user prompt with a system prompt.
+func nonRetryableCompletionError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "gemini api 400:") ||
+		strings.Contains(msg, "gemini api 401:") ||
+		strings.Contains(msg, "gemini api 403:") ||
+		strings.Contains(msg, "gemini api 429:")
+}
+
+func (c *Client) fallbackComplete(ctx context.Context, system string, messages []Message, cause error) (string, error) {
+	if c.fallback == nil || ctx.Err() != nil {
+		return "", cause
+	}
+	slog.Warn("llm provider failed; using mock fallback", "provider", c.provider.Name(), "error", cause)
+	out, err := c.fallback.Complete(ctx, system, messages)
+	if err != nil {
+		return "", fmt.Errorf("primary llm failed: %v; mock fallback failed: %w", cause, err)
+	}
+	return out, nil
+}
+
+func (c *Client) Complete(ctx context.Context, system string, messages []Message) (string, error) {
+	out, err := c.runPrimaryCompletion(ctx, func(cctx context.Context) (string, error) {
+		return c.provider.Complete(cctx, system, messages)
+	})
+	if err == nil {
+		return out, nil
+	}
+	return c.fallbackComplete(ctx, system, messages, err)
+}
+
+func (c *Client) CompleteFast(ctx context.Context, system string, messages []Message) (string, error) {
+	p, ok := c.provider.(fastProvider)
+	if !ok {
+		return c.Complete(ctx, system, messages)
+	}
+	out, err := c.runPrimaryCompletion(ctx, func(cctx context.Context) (string, error) {
+		return p.CompleteFast(cctx, system, messages)
+	})
+	if err == nil {
+		return out, nil
+	}
+	return c.fallbackComplete(ctx, system, messages, err)
+}
+
 func (c *Client) CompletePrompt(ctx context.Context, system, user string) (string, error) {
 	return c.Complete(ctx, system, []Message{{Role: RoleUser, Content: user}})
 }
 
-// CompleteJSON runs a completion and unmarshals the (possibly fenced) JSON
-// response into dst. It tolerates models that wrap JSON in ```json fences or
-// surround it with prose.
 func (c *Client) CompleteJSON(ctx context.Context, system, user string, dst any) error {
-	raw, err := c.CompletePrompt(ctx, system, user)
+	messages := []Message{{Role: RoleUser, Content: user}}
+	raw, err := c.Complete(ctx, system, messages)
 	if err != nil {
 		return err
 	}
+	if err := decodeJSON(raw, dst); err == nil {
+		return nil
+	} else if c.fallback != nil && ctx.Err() == nil {
+		// The primary provider may return prose/truncated JSON even when the HTTP
+		// request succeeds. Use the schema-correct mock rather than failing the feature.
+		slog.Warn("llm returned invalid JSON; using mock fallback", "provider", c.provider.Name(), "error", err)
+		fallbackRaw, fallbackErr := c.fallback.Complete(ctx, system, messages)
+		if fallbackErr != nil {
+			return fmt.Errorf("decode model JSON: %v; mock fallback failed: %w", err, fallbackErr)
+		}
+		return decodeJSON(fallbackRaw, dst)
+	} else {
+		return err
+	}
+}
+
+func (c *Client) CompleteJSONFast(ctx context.Context, system, user string, dst any) error {
+	messages := []Message{{Role: RoleUser, Content: user}}
+	raw, err := c.CompleteFast(ctx, system, messages)
+	if err != nil {
+		return err
+	}
+	if err := decodeJSON(raw, dst); err == nil {
+		return nil
+	} else if c.fallback != nil && ctx.Err() == nil {
+		slog.Warn("llm returned invalid JSON; using mock fallback", "provider", c.provider.Name(), "error", err)
+		fallbackRaw, fallbackErr := c.fallback.Complete(ctx, system, messages)
+		if fallbackErr != nil {
+			return fmt.Errorf("decode model JSON: %v; mock fallback failed: %w", err, fallbackErr)
+		}
+		return decodeJSON(fallbackRaw, dst)
+	} else {
+		return err
+	}
+}
+
+func decodeJSON(raw string, dst any) error {
 	clean := extractJSON(raw)
 	if clean == "" {
 		return errors.New("no JSON found in model response")
@@ -96,14 +177,20 @@ func (c *Client) CompleteJSON(ctx context.Context, system, user string, dst any)
 	return nil
 }
 
-// Embed proxies to the provider.
 func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	cctx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-	return c.provider.Embed(cctx, texts)
+	vecs, err := c.provider.Embed(cctx, texts)
+	cancel()
+	if err == nil {
+		return vecs, nil
+	}
+	if c.fallback == nil || ctx.Err() != nil {
+		return nil, err
+	}
+	slog.Warn("embedding provider failed; using mock fallback", "provider", c.provider.Name(), "error", err)
+	return c.fallback.Embed(ctx, texts)
 }
 
-// EmbedOne is a single-text convenience wrapper.
 func (c *Client) EmbedOne(ctx context.Context, text string) ([]float32, error) {
 	vecs, err := c.Embed(ctx, []string{text})
 	if err != nil {
@@ -115,14 +202,11 @@ func (c *Client) EmbedOne(ctx context.Context, text string) ([]float32, error) {
 	return vecs[0], nil
 }
 
-// extractJSON pulls the first JSON object/array out of a model response.
 func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
-	// Strip code fences.
 	if i := strings.Index(s, "```"); i >= 0 {
 		s = s[i+3:]
 		if j := strings.IndexByte(s, '\n'); j >= 0 {
-			// drop an optional language tag line like "json"
 			if !strings.ContainsAny(s[:j], "{[") {
 				s = s[j+1:]
 			}
@@ -132,7 +216,6 @@ func extractJSON(s string) string {
 		}
 	}
 	s = strings.TrimSpace(s)
-	// Find the outermost JSON delimiters.
 	start := strings.IndexAny(s, "{[")
 	if start < 0 {
 		return ""
