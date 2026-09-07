@@ -27,14 +27,16 @@ import (
 	"github.com/sagun-patwari/ai-career-platform/internal/role"
 	"github.com/sagun-patwari/ai-career-platform/internal/user"
 	"github.com/sagun-patwari/ai-career-platform/internal/worker"
+	"github.com/sagun-patwari/ai-career-platform/internal/workflowstate"
 )
 
 type Server struct {
-	Handler http.Handler
-	pool    *pgxpool.Pool
-	workers *worker.Pool
-	logger  *slog.Logger
-	llm     *llm.Client
+	Handler       http.Handler
+	pool          *pgxpool.Pool
+	workers       *worker.Pool
+	workflowState *workflowstate.Store
+	logger        *slog.Logger
+	llm           *llm.Client
 }
 
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, error) {
@@ -55,6 +57,14 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 		pool.Close()
 		return nil, err
 	}
+
+	workflowStore, err := workflowstate.New(cfg.RedisURL, cfg.WorkflowStateTTL)
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	workflowAdapter := analysis.NewRedisStateAdapter(workflowStore)
+
 	workers := worker.NewPool(ctx, 4, 256, logger)
 	jwt := auth.NewManager(cfg.JWTSecret, cfg.JWTTTL)
 
@@ -68,11 +78,12 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 	userSvc := user.NewService(userRepo, jwt)
 	resumeSvc, err := resume.NewService(resumeRepo, llmClient, workers, cfg.StorageDir)
 	if err != nil {
+		_ = workflowStore.Close()
 		pool.Close()
 		return nil, err
 	}
 	questionSvc := questionbank.NewService(questionRepo, ragEngine, llmClient)
-	analysisSvc := analysis.NewService(analysisRepo, resumeRepo, roleRepo, questionSvc, llmClient)
+	analysisSvc := analysis.NewService(analysisRepo, resumeRepo, roleRepo, questionSvc, llmClient, workflowAdapter)
 	interviewSvc := interview.NewService(interviewRepo, roleRepo, ragEngine, llmClient)
 
 	if err := seed(ctx, logger, roleRepo, questionSvc, cfg.SeedFile); err != nil {
@@ -118,10 +129,13 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Server, 
 		})
 	})
 
-	return &Server{Handler: r, pool: pool, workers: workers, logger: logger, llm: llmClient}, nil
+	return &Server{Handler: r, pool: pool, workers: workers, workflowState: workflowStore, logger: logger, llm: llmClient}, nil
 }
 
 func (s *Server) Close() {
 	s.workers.Shutdown()
+	if s.workflowState != nil {
+		_ = s.workflowState.Close()
+	}
 	s.pool.Close()
 }
