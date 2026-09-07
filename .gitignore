@@ -1,1 +1,6 @@
 backend/.env
+.DS_Store
+.careerforge-*/
+*.save
+*.backup-*
+.env

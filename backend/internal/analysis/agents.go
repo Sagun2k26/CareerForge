@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -15,76 +16,146 @@ import (
 )
 
 type workflowState struct {
-	userID     uuid.UUID
-	resumeID   uuid.UUID
-	roleID     uuid.UUID
-	resumeJSON string
-	role       role.Role
-	roleFit    RoleFitResult
-	gap        GapResult
-	roadmap    []RoadmapItem
-	interview  []InterviewPrepItem
+	UserID     uuid.UUID           `json:"user_id"`
+	ResumeID   uuid.UUID           `json:"resume_id"`
+	RoleID     uuid.UUID           `json:"role_id"`
+	ResumeJSON string              `json:"resume_json"`
+	Role       role.Role           `json:"role"`
+	RoleFit    RoleFitResult       `json:"role_fit"`
+	Gap        GapResult           `json:"gap"`
+	Roadmap    []RoadmapItem       `json:"roadmap"`
+	Interview  []InterviewPrepItem `json:"interview"`
 }
 
-func (s *Service) agents(st *workflowState) []workflowAgent {
+func (s *Service) loadWorkflowState(ctx context.Context, workflowID string) (workflowState, error) {
+	var st workflowState
+	_, err := s.state.Load(ctx, workflowID, &st)
+	return st, err
+}
+
+func (s *Service) patchWorkflowState(ctx context.Context, workflowID string, fn func(*workflowState)) error {
+	return s.state.Patch(ctx, workflowID, func(raw json.RawMessage) (any, error) {
+		var st workflowState
+		if err := json.Unmarshal(raw, &st); err != nil {
+			return nil, err
+		}
+		fn(&st)
+		return st, nil
+	})
+}
+
+func (s *Service) agents(workflowID string) []workflowAgent {
 	return []workflowAgent{
 		{name: "resume_analysis", run: func(ctx context.Context) error {
-			res, err := s.resumes.Get(ctx, st.resumeID)
+			st, err := s.loadWorkflowState(ctx, workflowID)
 			if err != nil {
 				return err
 			}
-			if res.UserID != st.userID {
+
+			res, err := s.resumes.Get(ctx, st.ResumeID)
+			if err != nil {
+				return err
+			}
+
+			if res.UserID != st.UserID {
 				return httpx.NewError(http.StatusForbidden, "forbidden", "not your resume")
 			}
 			if res.Status != resume.StatusParsed {
 				return httpx.NewError(http.StatusConflict, "not_ready", "resume is still being parsed")
 			}
-			targetRole, err := s.roles.Get(ctx, st.roleID)
+
+			targetRole, err := s.roles.Get(ctx, st.RoleID)
 			if err != nil {
 				return err
 			}
-			st.resumeJSON, st.role = string(res.ParsedJSON), targetRole
-			return nil
+
+			return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+				next.ResumeJSON = string(res.ParsedJSON)
+				next.Role = targetRole
+			})
 		}},
 		{name: "role_fit", dependsOn: []string{"resume_analysis"}, run: func(ctx context.Context) error {
-			system, user := llm.RoleFitPrompt(st.resumeJSON, st.role.Name, st.role.RequiredSkills)
-			return s.llm.CompleteJSON(ctx, system, user, &st.roleFit)
+			st, err := s.loadWorkflowState(ctx, workflowID)
+			if err != nil {
+				return err
+			}
+
+			system, user := llm.RoleFitPrompt(st.ResumeJSON, st.Role.Name, st.Role.RequiredSkills)
+			var out RoleFitResult
+			if err := s.llm.CompleteJSON(ctx, system, user, &out); err != nil {
+				return err
+			}
+
+			return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+				next.RoleFit = out
+			})
 		}},
 		{name: "skill_gap", dependsOn: []string{"resume_analysis"}, run: func(ctx context.Context) error {
-			system, user := llm.GapAnalysisPrompt(st.resumeJSON, st.role.Name, st.role.RequiredSkills)
-			return s.llm.CompleteJSON(ctx, system, user, &st.gap)
+			st, err := s.loadWorkflowState(ctx, workflowID)
+			if err != nil {
+				return err
+			}
+
+			system, user := llm.GapAnalysisPrompt(st.ResumeJSON, st.Role.Name, st.Role.RequiredSkills)
+			var out GapResult
+			if err := s.llm.CompleteJSON(ctx, system, user, &out); err != nil {
+				return err
+			}
+
+			return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+				next.Gap = out
+			})
 		}},
 		{name: "roadmap", dependsOn: []string{"skill_gap"}, run: func(ctx context.Context) error {
-			if len(st.gap.MissingSkills) == 0 {
-				st.roadmap = []RoadmapItem{}
-				return nil
+			st, err := s.loadWorkflowState(ctx, workflowID)
+			if err != nil {
+				return err
 			}
-			system, user := llm.RoadmapPrompt(st.role.Name, st.gap.MissingSkills)
+
+			if len(st.Gap.MissingSkills) == 0 {
+				return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+					next.Roadmap = []RoadmapItem{}
+				})
+			}
+
+			system, user := llm.RoadmapPrompt(st.Role.Name, st.Gap.MissingSkills)
 			var out struct {
 				Items []RoadmapItem `json:"items"`
 			}
 			if err := s.llm.CompleteJSON(ctx, system, user, &out); err != nil {
 				return err
 			}
-			st.roadmap = out.Items
-			return nil
+
+			return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+				next.Roadmap = out.Items
+			})
 		}},
 		{name: "interview_prep", dependsOn: []string{"role_fit", "skill_gap"}, run: func(ctx context.Context) error {
-			queryParts := append([]string{st.role.Name}, st.role.RequiredSkills...)
-			queryParts = append(queryParts, st.gap.MissingSkills...)
-			queryParts = append(queryParts, st.roleFit.Concerns...)
+			st, err := s.loadWorkflowState(ctx, workflowID)
+			if err != nil {
+				return err
+			}
+
+			queryParts := append([]string{st.Role.Name}, st.Role.RequiredSkills...)
+			queryParts = append(queryParts, st.Gap.MissingSkills...)
+			queryParts = append(queryParts, st.RoleFit.Concerns...)
 			query := strings.Join(queryParts, " ")
-			questions, err := s.questions.Search(ctx, query, &st.role.ID, 20)
+
+			questions, err := s.questions.Search(ctx, query, &st.Role.ID, 20)
 			if err != nil {
 				slog.Warn("interview question retrieval failed; continuing analysis", "error", err)
-				st.interview = []InterviewPrepItem{}
-				return nil
+				return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+					next.Interview = []InterviewPrepItem{}
+				})
 			}
-			st.interview = make([]InterviewPrepItem, 0, len(questions))
+
+			items := make([]InterviewPrepItem, 0, len(questions))
 			for _, q := range questions {
-				st.interview = append(st.interview, InterviewPrepItem{ID: q.ID, Topic: q.Topic, Prompt: q.Prompt})
+				items = append(items, InterviewPrepItem{ID: q.ID, Topic: q.Topic, Prompt: q.Prompt})
 			}
-			return nil
+			return s.patchWorkflowState(ctx, workflowID, func(next *workflowState) {
+				next.Interview = items
+			})
 		}},
 	}
 }

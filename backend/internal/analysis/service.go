@@ -21,37 +21,61 @@ type Service struct {
 	roles     *role.Repository
 	questions *questionbank.Service
 	llm       *llm.Client
+	state     *RedisStateAdapter
 }
 
-func NewService(repo *Repository, resumes *resume.Repository, roles *role.Repository, questions *questionbank.Service, client *llm.Client) *Service {
-	return &Service{repo: repo, resumes: resumes, roles: roles, questions: questions, llm: client}
+func NewService(repo *Repository, resumes *resume.Repository, roles *role.Repository, questions *questionbank.Service, client *llm.Client, state *RedisStateAdapter) *Service {
+	return &Service{repo: repo, resumes: resumes, roles: roles, questions: questions, llm: client, state: state}
 }
 
-// Analyze runs the dependency-aware agent graph and persists its final state.
+// Analyze runs the dependency-aware agent graph with intermediate state in Redis,
+// then persists the final analysis in PostgreSQL.
 func (s *Service) Analyze(ctx context.Context, userID, resumeID, roleID uuid.UUID) (Analysis, error) {
-	st := &workflowState{userID: userID, resumeID: resumeID, roleID: roleID}
-	if err := runWorkflow(ctx, s.agents(st)); err != nil {
+	if err := s.ensureRedisState(); err != nil {
+		return Analysis{}, err
+	}
+
+	analysisID := uuid.New()
+	workflowID := analysisID.String()
+
+	initial := workflowState{
+		UserID:   userID,
+		ResumeID: resumeID,
+		RoleID:   roleID,
+	}
+	if err := s.state.Init(ctx, workflowID, initial); err != nil {
+		return Analysis{}, err
+	}
+
+	if err := runWorkflow(ctx, s.agents(workflowID)); err != nil {
+		return Analysis{}, err
+	}
+
+	st, err := s.loadWorkflowState(ctx, workflowID)
+	if err != nil {
 		return Analysis{}, err
 	}
 
 	a := Analysis{
-		ID:            uuid.New(),
+		ID:            analysisID,
 		UserID:        userID,
 		ResumeID:      resumeID,
 		RoleID:        roleID,
-		RoleName:      st.role.Name,
-		GapScore:      st.gap.GapScore,
-		MatchedSkills: st.gap.MatchedSkills,
-		MissingSkills: st.gap.MissingSkills,
-		Summary:       st.gap.Summary,
-		RoleFit:       st.roleFit,
-		InterviewPrep: st.interview,
-		Roadmap:       st.roadmap,
+		RoleName:      st.Role.Name,
+		GapScore:      st.Gap.GapScore,
+		MatchedSkills: st.Gap.MatchedSkills,
+		MissingSkills: st.Gap.MissingSkills,
+		Summary:       st.Gap.Summary,
+		RoleFit:       st.RoleFit,
+		InterviewPrep: st.Interview,
+		Roadmap:       st.Roadmap,
 		CreatedAt:     time.Now().UTC(),
 	}
 	if err := s.repo.Save(ctx, a); err != nil {
 		return Analysis{}, err
 	}
+
+	_ = s.state.Delete(ctx, workflowID)
 	return s.repo.Get(ctx, a.ID)
 }
 
